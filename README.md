@@ -1,133 +1,181 @@
-# MPClient — Demo README
+# SDN-Based Traffic Monitoring & Anomaly Mitigation
 
-This repository contains a lightweight SDN-based traffic monitoring and mitigation demo. The goal is to provide a reproducible demo you can run locally (recommended on an Ubuntu VM) that shows detection of high-volume anomalous traffic and automatic mitigation using OpenFlow rules pushed by a Ryu controller.
+A Software-Defined Networking (SDN) system that monitors network traffic in real-time, detects anomalous flooding attacks using statistical analysis, and automatically mitigates threats by installing OpenFlow drop rules — all within a simulated Mininet environment.
 
-This README explains what is included, how to run the demo, what to expect, and next steps.
-
----
-
-## What I will deliver (files you should see)
-- `mpclient/topology.py` — Mininet topology script (attacker, victim, background hosts).
-- `mpclient/ryu_controller.py` — Ryu controller application that polls flow stats, runs threshold detection with EMA + hysteresis, and installs drop flows when needed.
-- `mpclient/traffic/benign.sh` — Helper instructions to generate normal traffic (iperf, ping).
-- `mpclient/traffic/attack.sh` — Helper instructions to generate attack traffic (hping3, ping flood).
-- `mpclient/disc.md` — Project approach and client-facing breakdown.
-- `mpclient/README.md` — (this file) instructions to run and reproduce the demo.
+![Packet Rate & EMA Analysis](logs/packet_rate_ema.png)
 
 ---
 
-## High-level steps to run the demo
-1. Prepare an Ubuntu VM (or a native Ubuntu machine) with root privileges.
-2. Install dependencies (Mininet, Open vSwitch, Ryu, iperf, hping3). See "Prerequisites" below for minimal guidance.
-3. Start the Ryu controller and the Mininet topology.
-4. Generate benign traffic, observe statistics, then run the attack script and observe detection + mitigation.
-5. Collect logs and review plots/metrics.
+## Architecture
+
+```
+┌──────────────┐     OpenFlow 1.3      ┌──────────────────────────┐
+│   OVS Switch │◄──────────────────────►│   Ryu/OS-Ken Controller  │
+│     (s1)     │   Flow Stats Polling   │   (ryu_controller.py)    │
+└──────┬───────┘                        │                          │
+       │                                │  • L2 Learning Switch    │
+  ┌────┼────┐                           │  • EMA Anomaly Detection │
+  │    │    │                           │  • Auto Mitigation       │
+  h1   h2   h3                          │  • CSV Logging           │
+  │    │    │                           └──────────────────────────┘
+Attacker Victim Benign
+```
+
+- **h1 (10.0.0.1)** — Attacker host: generates flood traffic
+- **h2 (10.0.0.2)** — Victim host: target of attacks
+- **h3 (10.0.0.3)** — Benign host: normal background traffic
 
 ---
 
-## Prerequisites (minimum)
-- Ubuntu (18.04 / 20.04 / 22.04 recommended)
-- Root (or `sudo`) access to install packages and run Mininet
-- Packages/tools:
-  - Mininet
-  - Open vSwitch
-  - Ryu (Python-based SDN controller framework)
-  - `iperf` (traffic generation)
-  - `hping3` (for attack traffic; optional if you use `ping` floods)
-  - Python 3 and `pip` for Ryu app dependencies
+## Detection Algorithm
 
-Notes:
-- If you prefer, I can provide a Dockerfile or VM snapshot with dependencies pre-installed.
-- Mininet typically requires running as root (or using the included `sudo` helper).
+The controller uses a **threshold-based anomaly detector** with:
 
----
+1. **Exponential Moving Average (EMA)** — Smooths per-source packet rates to reduce noise
+2. **Hysteresis (Sustained Windows)** — Requires the EMA to exceed the threshold for N consecutive polling intervals before triggering mitigation, reducing false positives
+3. **Automatic Recovery** — Drop rules include an `idle_timeout`, allowing blocked sources to resume communication after the attack stops
 
-## Example (manual) commands you will run
-- Start the controller (in a terminal on the VM):
-  - e.g., run the Ryu app: `ryu-manager mpclient/ryu_controller.py`
-- Start the Mininet topology (in another terminal, run as root):
-  - e.g., `sudo python3 mpclient/topology.py`
-- From the Mininet CLI, start benign traffic (example):
-  - `h2 iperf -s &` (start server on victim)
-  - `h3 iperf -c 10.0.0.2 -t 60 &` (start client)
-- From the Mininet CLI, run an attack (example with hping3):
-  - `h1 hping3 --udp --flood --rand-source -p 80 10.0.0.2` (UDP flood)
-  - or `h1 hping3 --flood -S -p 80 10.0.0.2` (TCP SYN flood)
-  - or `h1 ping -f 10.0.0.2` (ICMP flood)
-
-Important: Replace hostnames/IPs with those defined in the topology if different.
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `POLL_INTERVAL` | 1.0s | Flow stats polling frequency |
+| `EMA_ALPHA` | 0.4 | EMA smoothing factor (0 < α ≤ 1) |
+| `DETECTION_THRESHOLD` | 500 pkt/s | EMA threshold for anomaly |
+| `SUSTAINED_WINDOWS` | 3 | Consecutive windows before mitigation |
+| `MITIGATION_IDLE_TIMEOUT` | 30s | Drop rule auto-expiry |
 
 ---
 
-## What the controller does (brief)
-- Periodically polls Open vSwitch flow statistics.
-- Computes per-source packet/byte rates using a sliding window and an exponential moving average (EMA) to smooth noise.
-- Applies hysteresis to avoid rapid toggling (flapping) of mitigation state.
-- On confirmed sustained threshold violation, installs a high-priority OpenFlow drop rule that prevents the offending source from reaching the victim.
-- Installs timeouts / automatic expiry on mitigation rules so that blocks are not permanent unless re-triggered.
+## Results
+
+From a sample run with ICMP flood attack from h1:
+
+| Metric | Value |
+|--------|-------|
+| Detection Rate (Recall) | 100% |
+| Detection Latency | 2.0s |
+| Mitigation Latency | 2.0s |
+| Recovery Time | 35.1s |
+| Peak Attack Rate | 4,925 pkt/s |
+
+### Generated Visualizations
+
+| ![Packet Rate & EMA](logs/packet_rate_ema.png) | ![Event Timeline](logs/event_timeline.png) | ![Action Breakdown](logs/action_breakdown.png) |
+|:---:|:---:|:---:|
+| Packet Rate & EMA | Event Timeline | Action Breakdown |
 
 ---
 
-## Expected demonstration behavior
-- During benign traffic runs you will see normal throughput/latency with no mitigations.
-- When an attack is launched that exceeds configured thresholds, the controller will:
-  - Detect the anomaly (a detection log entry appears).
-  - Install a drop rule (mitigation log entry appears).
-  - The victim's incoming traffic from the offending source will fall to near-zero.
-- The demo collects logs for:
-  - Detection timestamps
-  - Mitigation timestamps
-  - Flow stats over time (packets/sec and bytes/sec)
-  - Simple CSVs suitable for plotting
+## Prerequisites
+
+- **OS**: Ubuntu 22.04+ (VM recommended for macOS/Windows users)
+- **System packages**: `mininet`, `openvswitch-switch`, `iperf`, `hping3`, `python3-pip`
+- **Python packages**: `os-ken` (or `ryu`), `matplotlib`
 
 ---
 
-## Configuration & tuning
-Key parameters you can adjust (in `mpclient/ryu_controller.py` or a config file):
-- `poll_interval` — how often the controller polls flow stats (e.g., 1s).
-- `aggregation_window` — how many seconds to aggregate before decision (e.g., 5s).
-- `threshold` — packets/sec or bytes/sec limit used to flag anomalies.
-- `ema_alpha` — smoothing factor for EMA.
-- `hysteresis` — amount to reduce false unblocks/flaps (e.g., require N consecutive windows to trigger).
-- `mitigation_timeout` — how long the installed drop flow persists (or choose manual unblocking).
+## Quick Start
 
-I will provide sensible defaults and a short calibration routine to pick thresholds from baseline runs.
+### 1. Install Dependencies
+
+```bash
+sudo apt-get update
+sudo apt-get install -y mininet openvswitch-switch iperf hping3 python3-pip
+pip3 install -r requirements.txt
+```
+
+### 2. Run the Demo
+
+```bash
+sudo bash run_demo.sh
+```
+
+This automatically:
+- Checks all prerequisites
+- Starts the SDN controller
+- Launches the Mininet topology
+- Drops you into the Mininet CLI
+
+### 3. Generate Traffic
+
+From the `mininet>` prompt:
+
+```bash
+# Verify connectivity
+pingall
+
+# Start benign traffic
+h2 iperf -s -u &
+h3 iperf -c 10.0.0.2 -t 60 &
+
+# Wait ~10 seconds for baseline, then launch attack
+h1 ping -f 10.0.0.2 &
+
+# Check flow table for drop rules
+s1 ovs-ofctl dump-flows s1
+```
+
+### 4. Analyze Results
+
+```bash
+# After exiting Mininet
+python3 analysis/plot_stats.py
+python3 analysis/evaluate.py --attacker 10.0.0.1
+```
+
+Output files are saved to `logs/`.
 
 ---
 
-## Reproducibility and logs
-- All demo runs should be reproducible with the included topology and traffic scripts.
-- I will include example commands and a short `run_demo.sh` in the repo (or provide the commands in `mpclient/README.md`) that perform:
-  1. Start the controller.
-  2. Start Mininet topology.
-  3. Run baseline traffic for calibration.
-  4. Run attack scenario(s) and collect logs.
-- Logs are saved as timestamped CSVs under `mpclient/logs/` (or printed to the controller terminal).
+## Project Structure
+
+```
+├── ryu_controller.py          # SDN controller (monitoring + detection + mitigation)
+├── launch_controller.py       # Framework-agnostic launcher (ryu / os-ken)
+├── topology.py                # Mininet topology (3 hosts + 1 OVS switch)
+├── run_demo.sh                # Automated demo orchestration
+├── requirements.txt           # Python dependencies
+├── traffic/
+│   ├── benign.sh              # Benign traffic generation commands
+│   └── attack.sh              # Attack traffic generation commands
+├── analysis/
+│   ├── plot_stats.py          # Matplotlib visualizations
+│   └── evaluate.py            # Evaluation metrics (precision, recall, latency)
+├── logs/                      # Generated CSVs, plots, and reports
+└── disc.md                    # Project approach document
+```
 
 ---
 
-## Troubleshooting tips
-- If the controller does not connect to the switch:
-  - Ensure the Mininet topology is configured to use the controller IP/port used by `ryu-manager`.
-- If `hping3` is not available in Mininet hosts:
-  - Install it in the VM image or use `ping -f` as an alternative.
-- If throughput seems low compared to real networks:
-  - This is expected: Mininet is a simulator and CPU limits in the VM affect absolute numbers. Use relative comparisons and detection timing.
+## Configuration & Tuning
+
+All detection parameters are configurable at the top of `ryu_controller.py`:
+
+```python
+POLL_INTERVAL = 1.0          # seconds between flow stats polls
+EMA_ALPHA = 0.4              # EMA smoothing factor
+DETECTION_THRESHOLD = 500.0  # packets/sec EMA threshold
+SUSTAINED_WINDOWS = 3        # consecutive windows to trigger
+MITIGATION_IDLE_TIMEOUT = 30 # drop flow auto-expiry (seconds)
+```
+
+**Calibration tip**: Run benign traffic first, observe the baseline EMA values in the CSV, and set `DETECTION_THRESHOLD` to ~2x the maximum benign EMA.
 
 ---
 
-## Safety and ethics
-- These scripts generate high-volume traffic within a controlled local simulation. Do NOT run attack commands (`hping3 --flood`, `ping -f`) against real production networks or outside an isolated lab. The demo is intended for controlled experimentation only.
+## Limitations & Future Work
+
+- **Per-flow detection**: The current approach monitors flow stats per source IP. Flood traffic arriving at the victim can inflate the victim's counters, causing false positives. Port mirroring or ingress-only counters would address this.
+- **Single threshold**: A fixed threshold may not adapt to varying network conditions. Future work could explore adaptive baselines or ML-based classifiers.
+- **Single topology**: Tested with 1 switch, 3 hosts. Scaling to multi-switch topologies with distributed detection is left for future work.
 
 ---
 
-## Next steps I will take (if you confirm)
-- Populate the repository with:
-  - The topology script (`mpclient/topology.py`)
-  - The Ryu controller (`mpclient/ryu_controller.py`)
-  - A small `run_demo.sh` to orchestrate a sample run
-  - Example traffic scripts and a short calibration guide
-- Run a sample calibration in my environment, tune default thresholds, and include sample output plots.
-- Provide a one-page client summary you can use for presentations.
+## Safety & Ethics
 
-Please confirm you want me to proceed with the implementation (I will begin with a controller-only mitigation approach as recommended). If you prefer the hybrid option (controller + `iptables`), tell me now and I will include host-level blocking support.
+⚠️ These scripts generate high-volume traffic within a **controlled local simulation**. Do NOT run attack commands (`hping3 --flood`, `ping -f`) against real production networks. This project is intended for **educational and research purposes only**.
+
+---
+
+## License
+
+This project was developed as a university major project demonstrating SDN security concepts.
