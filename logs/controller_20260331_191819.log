@@ -1,0 +1,3 @@
+INFO:__main__:Using framework: os_ken
+INFO:__main__:OpenFlow listen port: 6633
+INFO:__main__:Controller started. Listening on port 6633

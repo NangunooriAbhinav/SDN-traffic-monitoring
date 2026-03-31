@@ -22,18 +22,32 @@ import csv
 import os
 from datetime import datetime
 
-from ryu.base import app_manager
-from ryu.controller import ofp_event
-from ryu.controller.handler import (
-    MAIN_DISPATCHER,
-    CONFIG_DISPATCHER,
-    DEAD_DISPATCHER,
-    set_ev_cls,
-)
-from ryu.ofproto import ofproto_v1_3
-from ryu.ofproto import ofproto_v1_3_parser
-from ryu.lib import hub
-from ryu.lib.packet import packet, ethernet, ether_types, ipv4, arp
+try:
+    from ryu.base import app_manager
+    from ryu.controller import ofp_event
+    from ryu.controller.handler import (
+        MAIN_DISPATCHER,
+        CONFIG_DISPATCHER,
+        DEAD_DISPATCHER,
+        set_ev_cls,
+    )
+    from ryu.ofproto import ofproto_v1_3
+    from ryu.ofproto import ofproto_v1_3_parser
+    from ryu.lib import hub
+    from ryu.lib.packet import packet, ethernet, ether_types, ipv4, arp
+except ImportError:
+    from os_ken.base import app_manager
+    from os_ken.controller import ofp_event
+    from os_ken.controller.handler import (
+        MAIN_DISPATCHER,
+        CONFIG_DISPATCHER,
+        DEAD_DISPATCHER,
+        set_ev_cls,
+    )
+    from os_ken.ofproto import ofproto_v1_3
+    from os_ken.ofproto import ofproto_v1_3_parser
+    from os_ken.lib import hub
+    from os_ken.lib.packet import packet, ethernet, ether_types, ipv4, arp
 
 LOG = logging.getLogger("ryu_controller")
 LOG.setLevel(logging.INFO)
@@ -55,8 +69,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 # ---------------------------
 
+# Compatibility: os-ken renamed RyuApp to OSKenApp
+_BaseApp = getattr(app_manager, 'RyuApp', None) or getattr(app_manager, 'OSKenApp')
 
-class SimpleSDNMonitor(app_manager.RyuApp):
+
+class SimpleSDNMonitor(_BaseApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):

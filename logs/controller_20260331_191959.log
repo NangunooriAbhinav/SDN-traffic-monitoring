@@ -1,0 +1,5 @@
+INFO:__main__:Using framework: os_ken
+INFO:__main__:OpenFlow listen port: 6633
+usage: launch_controller [-h] [--config-dir DIR] [--config-file PATH]
+                         [--shell_completion SHELL_COMPLETION]
+launch_controller: error: unrecognized arguments: --ofp-tcp-listen-port 6633

@@ -87,13 +87,13 @@ check_prerequisites() {
         fi
     done
 
-    # Check ryu-manager
-    if ! command -v ryu-manager &>/dev/null; then
-        # Try python module
-        if ! python3 -c "import ryu" 2>/dev/null; then
-            missing+=("ryu-manager (pip install ryu)")
+    # Check ryu-manager or osken-manager
+    if ! command -v ryu-manager &>/dev/null && ! command -v osken-manager &>/dev/null; then
+        # Try python module (ryu or os_ken)
+        if ! python3 -c "import ryu" 2>/dev/null && ! python3 -c "import os_ken" 2>/dev/null; then
+            missing+=("ryu-manager or osken-manager (pip install os-ken)")
         else
-            warn "ryu-manager not in PATH, but ryu module found. Will use 'python3 -m ryu.cmd.manager'."
+            warn "Manager not in PATH, but Python module found. Will use python3 -m to launch."
         fi
     fi
 
@@ -131,18 +131,27 @@ start_controller() {
     info "Starting Ryu controller..."
     mkdir -p "${LOG_DIR}"
 
-    # Determine how to invoke ryu-manager
+    # Determine how to invoke the controller
     local ryu_cmd
     if command -v ryu-manager &>/dev/null; then
         ryu_cmd="ryu-manager"
+    elif command -v osken-manager &>/dev/null; then
+        ryu_cmd="osken-manager"
     else
-        ryu_cmd="python3 -m ryu.cmd.manager"
+        # Use direct launcher (works with any ryu/os-ken version)
+        ryu_cmd=""
     fi
 
     # Start in background, log to file
-    ${ryu_cmd} "${CONTROLLER_SCRIPT}" \
-        --ofp-tcp-listen-port "${CONTROLLER_PORT}" \
-        > "${CONTROLLER_LOG}" 2>&1 &
+    if [[ -n "${ryu_cmd}" ]]; then
+        ${ryu_cmd} "${CONTROLLER_SCRIPT}" \
+            --ofp-tcp-listen-port "${CONTROLLER_PORT}" \
+            > "${CONTROLLER_LOG}" 2>&1 &
+    else
+        python3 "${SCRIPT_DIR}/launch_controller.py" \
+            --ofp-tcp-listen-port "${CONTROLLER_PORT}" \
+            > "${CONTROLLER_LOG}" 2>&1 &
+    fi
     CONTROLLER_PID=$!
 
     info "Ryu controller started (PID ${CONTROLLER_PID})"

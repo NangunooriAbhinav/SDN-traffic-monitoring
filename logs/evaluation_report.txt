@@ -1,0 +1,57 @@
+======================================================================
+  SDN ANOMALY DETECTION — EVALUATION REPORT
+======================================================================
+
+SUMMARY
+----------------------------------------
+  Total source IPs observed:  3
+  Total stats samples:        657
+  Total events logged:        8
+  Known attacker IPs:         10.0.0.1
+
+CLASSIFICATION RESULTS
+----------------------------------------
+  True Positives  (TP): 1  ['10.0.0.1']
+  False Positives (FP): 1  ['10.0.0.2']
+  False Negatives (FN): 0  []
+  True Negatives  (TN): 1  ['10.0.0.3']
+
+  Detection Rate (Recall): 100.00%
+  Precision:               50.00%
+  False Positive Rate:     50.00%
+  False Negative Rate:     0.00%
+
+LATENCY METRICS
+----------------------------------------
+  Avg detection latency:  2.00s
+
+PER-SOURCE BREAKDOWN
+----------------------------------------
+
+  [ATTACKER] 10.0.0.1 — MITIGATED
+    Samples: 212, Events: 4
+    Max pkt rate: 4925.0 pkt/s, Max EMA: 3078.1
+    Avg EMA: 719.8
+    Detection latency: 2.00s
+    Mitigation latency: 2.00s
+    Recovery time: 35.07s
+    Actions: anomaly=2, blocked=62, mitigate=1, normal=146, unblocked=1
+
+  [BENIGN] 10.0.0.2 — MITIGATED
+    Samples: 269, Events: 4
+    Max pkt rate: 4925.0 pkt/s, Max EMA: 3078.1
+    Avg EMA: 567.3
+    Detection latency: 2.00s
+    Mitigation latency: 2.00s
+    Recovery time: 35.07s
+    Actions: anomaly=2, blocked=62, mitigate=1, normal=203, unblocked=1
+
+  [BENIGN] 10.0.0.3 — not mitigated
+    Samples: 176, Events: 0
+    Max pkt rate: 1.0 pkt/s, Max EMA: 1.0
+    Avg EMA: 0.0
+    Actions: normal=176
+
+======================================================================
+  Report generated: 2026-03-31T19:47:08.755486
+======================================================================

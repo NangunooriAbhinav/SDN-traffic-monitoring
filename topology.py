@@ -53,9 +53,11 @@ def build_network(
     info("=== Creating Mininet network\n")
     if controller_type == "remote":
         info("Using remote controller at %s:%s\n" % (ryu_ip, ryu_port))
-        controller = RemoteController("c0", ip=ryu_ip, port=int(ryu_port))
         net = Mininet(
-            controller=controller, switch=OVSSwitch, link=TCLink, autoSetMacs=True
+            switch=OVSSwitch, link=TCLink, autoSetMacs=True
+        )
+        net.addController(
+            "c0", controller=RemoteController, ip=ryu_ip, port=int(ryu_port)
         )
     else:
         info("Using local (built-in) controller\n")
