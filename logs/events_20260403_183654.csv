@@ -1,0 +1,9 @@
+timestamp,dpid,src_ip,event_type,ema,threshold,detail
+2026-04-03T18:43:15.547722,1,10.0.0.1,anomaly_detected,1179.60,500.00,sustain=1/3
+2026-04-03T18:43:15.547803,1,10.0.0.2,anomaly_detected,1181.67,500.00,sustain=1/3
+2026-04-03T18:43:17.283089,1,10.0.0.1,anomaly_detected,1148.92,500.00,sustain=2/3
+2026-04-03T18:43:17.283131,1,10.0.0.2,anomaly_detected,1150.16,500.00,sustain=2/3
+2026-04-03T18:43:18.291591,1,10.0.0.1,mitigation,689.35,500.00,drop flow installed
+2026-04-03T18:43:18.291754,1,10.0.0.2,mitigation,690.09,500.00,drop flow installed
+2026-04-03T18:43:54.608157,1,10.0.0.1,unblock_heuristic,238.67,500.00,ema dropped below 60% threshold
+2026-04-03T18:43:54.608199,1,10.0.0.2,unblock_heuristic,238.67,500.00,ema dropped below 60% threshold
